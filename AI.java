@@ -44,7 +44,7 @@ public class AI extends Thread
 	//Reused 2D arrays to keep track of current logic - clear after use.
 	private Point[][] pointMap;
 	private ArrayList<PlanPointPartial[][]> jumpPointMaps=new ArrayList();
-	protected boolean[][] mapOfTakenSpots;
+	protected boolean[][] mapOfTakenSpots; //False if any piece may be placed here, true if blocked.
 	
 	//Type checking for effects
 	public static final Class<Piece.AffectedPiece> aimEffect;
@@ -63,7 +63,6 @@ public class AI extends Thread
 	}
 	protected class AnalysisForPiece
 	{
-		//SubType type;
 		Piece piece;
 		Special special;
 		
@@ -75,7 +74,6 @@ public class AI extends Thread
 		int[] damageToTarget; //theoreticalDamageToPieceIndex;
 		//damageToTarget may be negative - signifies damage via special instead
 		//of normal attack.
-		//HashMap<ArrayList<ExpectedChange>, Integer> realDamageToTarget=new HashMap();
 		int maxJumps=0; //Number of jumps this piece can perform, at most.
 		ArrayList<PlanPointScore>[][] moveScorePointMap; //Map of useful spots to move to, and for approaching which enemy.
 		
@@ -95,7 +93,6 @@ public class AI extends Thread
 		//Shallow analysis. Called directly for enemy pieces, otherwise subset of my pieces
 		public AnalysisForPiece(Piece p)
 		{
-			//type=p.subType();
 			piece=p;
 			special=p.pieceType().special;
 			int actions=(p.player()==game.playerTurn)?(p.actions()):(p.maxActions()); //Actions this piece can(or will be able to) do
@@ -182,9 +179,7 @@ public class AI extends Thread
 		protected class GenerateWholeMapMove
 		{
 			int energy=(special==Special.Jump)?(piece.energy()):0;
-			//ArrayList<PlanPointThin> options=new ArrayList();
 			PlanPointThin source;
-			//PlanPointPartial sourceBack;
 			int actions=piece.actions();
 			int moves=0;
 			int jumps=0;
@@ -194,7 +189,6 @@ public class AI extends Thread
 			int enemyI;
 			
 			ArrayList<PlanPointPartial> optionsBack=new ArrayList();
-			//int jumps=0;
 			public GenerateWholeMapMove()
 			{
 				/*
@@ -214,15 +208,9 @@ public class AI extends Thread
 				 * reachableFroms for everything
 				 * Every move after that I want 
 				 */
-				//moveTowardsTargets=new SortedArrayList();
 				vpps.turnsToReach = new int[enemyPotential.length];
 				moveScorePointMap=new ArrayList[map.width][map.height];
-				//int last=0;
-				//int lastNormal=0;
 				maxActions=piece.actions()+1; //because I would need +1 elsewhere otherwise
-				//int startNormal, start;
-				//options.add(new PlanPointThin(piece.x(), piece.y(), actions, 0));
-				//Fills pointMap with least-jump-moves
 				MovementLooper<PlanPointThin> data = new MovementLooper<PlanPointThin>()
 				{
 					@Override
@@ -251,7 +239,6 @@ public class AI extends Thread
 								if(enemy.x()==x && enemy.y()==y)
 								{
 									vpps.turnsToReach[i]=piece.actions()-actions;
-									//vpps.jumpsToReach[i]=source.jumpsLeft;
 									unfoundEnemies--;
 									break;
 								}
@@ -263,81 +250,28 @@ public class AI extends Thread
 						pointMap[x][y]=P;
 					}
 					int maxActionCounter=0;
-					//int maxAction=0;
 					int actions;
 					@Override
 					public boolean checkLoop()
 					{
 						actions--;
 						if(unfoundEnemies>0) return true;
-						//if(maxAction==0) { maxAction=piece.maxActions()+1; maxActionCounter=maxAction; }
 						maxActionCounter--;
 						return maxActionCounter>=0;
 					}
 					@Override
-					public void init(Object data) { maxActionCounter=((Piece)data).maxActions()+1; actions=maxActionCounter-1; }
+					public void init(Object data)
+					{
+						Piece p = (Piece)data;
+						actions=p.actions();
+						maxActionCounter=p.maxActions()+1;
+					}
 				};
 				data.init(piece);
-				data.doLoop(new PlanPointThin(piece.x(), piece.y(), actions, 0),piece,game,energy>0);
+				PlanPointThin P = new PlanPointThin(piece.x(), piece.y(), actions, 0);
+				P.jumpsLeft=energy;
+				data.doLoop(P,piece,game,energy>0);
 				ArrayList<PlanPointThin> options = data.options; //Just to be able to clear the PointMap a bit more efficiently
-				/*
-				while(unfoundEnemies>0)
-				{
-					actions--;
-					start=options.size()-1;
-					for(moves=piece.moveRange()-1;moves>=0;moves--)
-					{
-						startNormal=options.size()-1;
-						for(int j=startNormal;j>=lastNormal;j--)
-						{
-							source=options.get(j);
-							for(int k=0;k<4;k++)
-								doAddEverPositionThin(k); //, data
-						}
-						lastNormal=startNormal+1;
-					}
-					if(energy>0) for(int j=start;j>=last;j--)
-					{
-						source=options.get(j);
-						if(source.jumpsLeft==0) continue;
-						source.jumpsLeft--;
-						for(int k=4;k<12;k++)
-							doAddEverPositionThin(k); //, data
-						source.jumpsLeft++;
-					}
-					last=start+1;
-				}
-				for(int i=maxActions;i>0;i--)
-				{
-					actions--;
-					start=options.size()-1;
-					for(moves=piece.moveRange()-1;moves>=0;moves--)
-					{
-						startNormal=options.size()-1;
-						for(int j=startNormal;j>=lastNormal;j--)
-						{
-							source=options.get(j);
-							for(int k=0;k<4;k++)
-								doAddEverPositionThin(k); //, data
-						}
-						lastNormal=startNormal+1;
-					}
-					if(energy>0) for(int j=start;j>=last;j--)
-					{
-						source=options.get(j);
-						if(source.jumpsLeft==0) continue;
-						source.jumpsLeft--;
-						for(int k=4;k<12;k++)
-							doAddEverPositionThin(k); //, data
-						source.jumpsLeft++;
-					}
-					last=start+1;
-				}
-				*/
-				//vpps.wholeMapPoints=options.toArray(new PlanPointThin[options.size()]);
-				//if(energy>0)
-				//	for(int i=0;i<vpps.jumpsToReach.length;i++)
-				//		vpps.jumpsToReach[i]=energy-vpps.jumpsToReach[i];
 				while(jumpPointMaps.size()<=energy)
 					jumpPointMaps.add(new PlanPointPartial[map.width][map.height]);
 				for(enemyI=0;enemyI<enemyPotential.length;enemyI++)
@@ -345,13 +279,13 @@ public class AI extends Thread
 					AnalysisForPiece enemy=enemyPotential[enemyI];
 					PlanPointThin enemyStart=(PlanPointThin)pointMap[enemy.piece.x()][enemy.piece.y()];
 					enemyStart.jumpsLeft=0;
-					optionsBack.add(enemyStart);
+					//jumpPointMaps.get(0)[enemyStart.x][enemyStart.y]=enemyStart;
+					//optionsBack.add(enemyStart);
 					source=enemyStart; //getSource(enemyStart);
-					//actions=0;
 					moves=0;
 					jumps=0;
 					int lastNormal=0; int last=0;
-					actions=-vpps.turnsToReach[enemyI]+1;
+					actions=-vpps.turnsToReach[enemyI]+piece.actions();
 					for(int i=0;i<4;i++)
 						doAddEverPositionBack(i);
 					/* Start at enemyStart
@@ -364,9 +298,9 @@ public class AI extends Thread
 					 * 
 					 * Path is a dead end if?
 					 */
-					//int stopActions=vpps.turnsToReach[enemyI]+1;
-					for(;actions<maxActions;actions++)//actions=-stopActions
+					while(actions<maxActions)//actions=-turnsToReach, have to init before doAddEverPositionBack loop though
 					{
+						actions++;
 						int start=optionsBack.size()-1;
 						for(moves=0;moves<stopMove;moves++)
 						{
@@ -413,22 +347,21 @@ public class AI extends Thread
 				int y=source.y+PlanPointThin.dY[fromIndex];
 				int z=jumps;
 				PlanPointPartial P;
-				//if(!MechanicsLibrary.mayEverPositionAt(game, piece, x, y)) return;
-				//if(x<0 || x>=map.width || y<0 || y>=map.height) return;
 				while((P=(PlanPointPartial)jumpPointMaps.get(z)[x][y])==null && --z>=0);
 				if(P!=null) return;
 				PlanPointThin target=(PlanPointThin)pointMap[x][y];
 				//target.actionsLeft can be a big number because of jumps. This needs some complicated logic to work right, TODO
 				//if(target.actionsLeft>actions || (target.actionsLeft==actions && moves>target.movesLeft))
 				//	return;
-				P=new PlanPointPartial(x, y, actions, moves, jumps);
+				//P=new PlanPointPartial(x, y, actions, moves, jumps);
+				P=new PlanPointPartial(x, y, target.actionsLeft, target.movesLeft, jumps);
 				jumpPointMaps.get(jumps)[x][y]=P;
 				optionsBack.add(P);
-				if(target.actionsLeft>=-1) //if(actions>=0 && target.actionsLeft>=-1) //TODO: Figure out if this should be -1 or 0
+				if(target.actionsLeft>=0)
 				{
 					//+vpps.turnsToReach[enemyI] to fix score offset to be comparable between enemies
-					//TODO: Doublecheck this actions is correct.
-					PlanPointScore score=new PlanPointScore(x, y, (actions+vpps.turnsToReach[enemyI])*stopMove - moves, jumps, enemyI, actions);
+					//TODO: Doublecheck this actions is correct later? Currently it is unused and meaningless, might eventually be used by MoveRank comparison/selection.
+					PlanPointScore score=new PlanPointScore(x, y, (actions+vpps.turnsToReach[enemyI])*stopMove + moves, jumps, enemyI, actions);
 					ArrayList<PlanPointScore> list=moveScorePointMap[x][y];
 					if(list==null)
 					{
@@ -438,67 +371,15 @@ public class AI extends Thread
 					list.add(score);
 				}
 			}
-			/*
-			protected final void doAddEverPositionThin(int fromIndex)
-			{
-				int x=source.x+PlanPointThin.dX[fromIndex];
-				int y=source.y+PlanPointThin.dY[fromIndex];
-				PlanPointThin P;
-				if(!MechanicsLibrary.mayEverPositionAt(game, piece, x, y))
-					return;
-				else if((P=(PlanPointThin)pointMap[x][y])!=null)
-				{
-					if(P.jumpsLeft>=source.jumpsLeft)
-					{
-						P.reachableFlags|=PlanPointThin.inverseFlagIndex[fromIndex];
-						return;
-					}
-					//else if((P.actionsLeft < actions+maxActions)||(P.actionsLeft == actions+maxActions && P.movesLeft<=moves)){}
-					int oldFlags=P.reachableFlags;
-					P=new PlanPointThin(P.x, P.y, P.actionsLeft, P.movesLeft);
-					P.reachableFlags=oldFlags;
-				}
-				else
-				{
-					P=new PlanPointThin(x, y, actions-1, moves); //, source.jumpsLeft
-					for(int i=enemyPotential.length-1;i>=0;i--)
-					{
-						if(vpps.turnsToReach[i]!=0) continue;
-						Piece enemy=enemyPotential[i].piece;
-						if(enemy.x()==x && enemy.y()==y)
-						{
-							vpps.turnsToReach[i]=piece.actions()-actions;
-							//vpps.jumpsToReach[i]=source.jumpsLeft;
-							unfoundEnemies--;
-							break;
-						}
-					}
-				}
-				P.jumpsLeft=source.jumpsLeft;
-				P.reachableFlags|=PlanPointThin.inverseFlagIndex[fromIndex];
-				options.add(P);
-				pointMap[x][y]=P;
-			}
-			*/
 		}
 		protected class GenerateBestMoveToward
 		{
 			//TODO: Finish this. Needs to create a MoveTask or something.
-			//int energy=(special==Special.Jump)?(piece.energy()):0;
-			//ArrayList<PlanPointPath> options=new ArrayList();
 			ArrayList<PlanPointScore> results=new ArrayList();
-			//PlanPointPath source;
-			//int actions=piece.actions();
-			//int moves=0;
-			//int jumps=0;
-			//int bestScore=Integer.MAX_VALUE; //Lower is better
 			WholeTurnPlan plan;
 			public GenerateBestMoveToward(WholeTurnPlan thePlan)
 			{
 				plan=thePlan;
-				//int last=0;
-				//int lastNormal=0;
-				//int startNormal, start;
 				
 				MovementLooper<PlanPointPath> looper = new MovementLooper<PlanPointPath>()
 				{
@@ -532,6 +413,10 @@ public class AI extends Thread
 							if(PChange.addedPiece!=null)
 								return;
 						}
+						else if(!MechanicsLibrary.mayPositionAt(game, piece, x, y))
+						{
+							return;
+						}
 
 						P=new PlanPointPath(x, y, actions-1, moves, jumps);
 						options.add(P);
@@ -564,86 +449,10 @@ public class AI extends Thread
 				int energy=(special==Special.Jump)?(piece.energy()):0;
 				looper.init(piece);
 				looper.doLoop(new PlanPointPath(piece.x(), piece.y(), actions, 0, 0), piece, game, energy>0);
-				/*
-				options.add(new PlanPointPath(piece.x(), piece.y(), actions, 0, 0));
-				while(actions-->=0)
-				{
-					start=options.size()-1;
-					for(moves=piece.moveRange()-1;moves>=0;moves--)
-					{
-						startNormal=options.size()-1;
-						for(int j=startNormal;j>=lastNormal;j--)
-						{
-							source=options.get(j);
-							jumps=source.jumpsLeft;
-							for(int k=0;k<4;k++)
-								doAddEverPositionThin(k); //, data
-						}
-						lastNormal=startNormal+1;
-					}
-					if(energy>0) for(int j=start;j>=last;j--)
-					{
-						source=options.get(j);
-						if(source.jumpsLeft==0) continue;
-						jumps=source.jumpsLeft-1;
-						for(int k=4;k<12;k++)
-							doAddEverPositionThin(k); //, data
-					}
-					last=start+1;
-				}
-				*/
-				//while(jumpPointMaps.size()<=energy) //Why was this here?
-				//	jumpPointMaps.add(new PlanPointPartial[map.width][map.height]);
 				
 				for(PlanPointPartial point : looper.options)
 					pointMap[point.x][point.y]=null;
 			}
-			/*
-			protected final void doAddEverPositionThin(int fromIndex)
-			{
-				int x=source.x+PlanPointThin.dX[fromIndex];
-				int y=source.y+PlanPointThin.dY[fromIndex];
-				if(!MechanicsLibrary.mayPositionAt(game, piece, x, y))
-					return;
-				PlanPointPath P=(PlanPointPath)pointMap[x][y];
-				ExpectedChange PChange;
-				if(P!=null)
-				{
-					if(P.jumpsLeft>=jumps)
-						return;
-				}
-				else if((PChange=plan.getChange(x, y))!=null)
-				{
-					if(PChange.addedPiece!=null)
-						return;
-				}
-				
-				P=new PlanPointPath(x, y, actions-1, moves, jumps);
-				options.add(P);
-				pointMap[x][y]=P;
-				P.previous=source;
-				
-				ArrayList<PlanPointScore> scores=moveScorePointMap[x][y];
-				if(scores!=null)
-				{
-					for(int i=scores.size()-1;i>=0;i--)
-					{
-						PlanPointScore score=scores.get(i);
-						if(bestScore<score.score) continue;
-						if(score.jumpsLeft > (energy-jumps)) continue;
-						Integer lifeLeft=plan.remainingLife.get(enemyPotential[score.target].piece);
-						if(lifeLeft!=null && lifeLeft.intValue()==0) continue;
-						if(score.score<bestScore)
-						{
-							results.clear();
-							bestScore=score.score;
-						}
-						score.previous=P;
-						results.add(score);
-					}
-				}
-			}
-			*/
 		}
 		//Calculates or loads the best path to attack the target for the given layout. Small exception: Blast pieces choose the best spot to fire at.
 		public FinalSecondPlanPoint BestPoint(int target, ArrayList<ExpectedChange> changes, boolean[][] finalMap)
@@ -893,7 +702,7 @@ public class AI extends Thread
 								P.reachableFrom.add(source);
 								return;
 							}
-							P=new PlanPoint(x, y, actions-1, moves); //, source.jumpsLeft
+							P=new PlanPoint(x, y, actions, moves); //, source.jumpsLeft
 							P.reachableFrom.add(source);
 							options.add(P);
 							pointMap[x][y]=P;
@@ -904,11 +713,13 @@ public class AI extends Thread
 						public boolean checkLoop()
 						{
 							actions--;
-							return actions>0;
+							return actions>1;
 						}
 					};
 					data.init(piece);
-					data.doLoop(new PlanPoint(piece.x(), piece.y(), piece.actions(), 0), piece, game, true);
+					PlanPoint P=new PlanPoint(piece.x(), piece.y(), piece.actions(), 0);
+					P.jumpsLeft=maxJumps;
+					data.doLoop(P, piece, game, maxJumps>0);
 
 					vpps=new AggregateVPP();
 					vpps.reachablePoints=data.options.toArray(new PlanPoint[data.options.size()]);
@@ -970,9 +781,10 @@ public class AI extends Thread
 					
 					maxDamage=0;
 					vpps.plans[i].spps=new SecondPlanPoint[goodDestinations.size()];
+					PlanPoint targetPoint=new PlanPoint(target.x(), target.y());
 					for(PlanPoint destination : goodDestinations)
 					{
-						int multip=vpps.plans[i].findPathsTo(destination, this);
+						int multip=vpps.plans[i].findPathsTo(destination, targetPoint, this);
 						if(multip==0)
 							continue;
 						int damage=DamageTo(target, destination, multip);
@@ -986,73 +798,6 @@ public class AI extends Thread
 			}
 			return vpps;
 		}
-
-		/*
-		protected class MakeMoveOptions
-		{
-			int actions=piece.actions(); //piece.actions()-1;
-			int energy=(special==Special.Jump)?(piece.energy()):0;
-			ArrayList<PlanPoint> options=new ArrayList();
-			int pieceX=piece.x();
-			int pieceY=piece.y();
-			int last=0;
-			int lastNormal=0;
-			PlanPoint source;
-			public MakeMoveOptions()
-			{
-				options.add(new PlanPoint(pieceX, pieceY, actions, 0)); //, energy
-				pointMap[pieceX][pieceY]=options.get(0);
-				for(;actions>0;actions--)
-				{
-					int start=options.size()-1;
-					for(int i=piece.moveRange()-1;i>=0;i--)
-					{
-						int startNormal=options.size()-1;
-						for(int j=startNormal;j>=lastNormal;j--)
-						{
-							source=options.get(j);
-							doAddEverPosition(source.x+1, source.y, i); //, data
-							doAddEverPosition(source.x, source.y+1, i); //, data
-							doAddEverPosition(source.x-1, source.y, i); //, data
-							doAddEverPosition(source.x, source.y-1, i); //, data
-						}
-						lastNormal=startNormal+1;
-					}
-					if(energy>0)
-					{
-						for(int j=start;j>=last;j--)
-						{
-							source=options.get(j);
-							//if(source.jumpsLeft==0) continue;
-							//source.jumpsLeft--;
-							DiamondIterator iter=new DiamondIterator(source.x, source.y, 2, 2);
-							while(iter.next())
-								doAddEverPosition(iter.cX(), iter.cY(), 0); //, data
-							//source.jumpsLeft++;
-						}
-					}
-					last=start+1;
-				}
-				for (PlanPoint P : options)
-					pointMap[P.x][P.y]=null;
-			}
-			protected final void doAddEverPosition(int x, int y, int moves)
-			{
-				if(!MechanicsLibrary.mayEverPositionAt(game, piece, x, y))
-					return;
-				PlanPoint P=(PlanPoint)pointMap[x][y];
-				if(P!=null)
-				{
-					P.reachableFrom.add(source);
-					return;
-				}
-				P=new PlanPoint(x, y, actions-1, moves); //, source.jumpsLeft
-				P.reachableFrom.add(source);
-				options.add(P);
-				pointMap[x][y]=P;
-			}
-		}
-		*/
 	}
 	@Override
 	public void run()
@@ -1086,15 +831,12 @@ public class AI extends Thread
 				//For now the piece type doesn't matter, so sending null
 				mapOfTakenSpots[x][y]=!MechanicsLibrary.mayPositionAt(game, null, x, y);
 			}
-		//ArrayMap<Piece, Integer> movesLeft=new ArrayMap();
 		for(int index=0;index<myPotential.length;index++)
 		{
 			AnalysisForPiece pot=new AnalysisForPiece(map.getPiece(myPlayer, index), enemyPotential);
 			myPotential[index] = pot;
-			//movesLeft.put(pot.piece, pot.piece.actions());
 		}
 		WholeTurnPlan firstPlan=new WholeTurnPlan();
-		//firstPlan.moves=new DoubleArray(new Action[myPotential.length][]);
 		firstPlan.changes=changes;
 		ActionRank bestRank;
 		ArrayList<AnalysisForPiece> myPotentialLeft=new ArrayList(myPotential.length);
@@ -1137,6 +879,7 @@ public class AI extends Thread
 						dRank.damageRatio=ratio;
 						dRank.startPoint=point;
 						dRank.enemyPieceIndex=i;
+						dRank.myPieceIndex=index;
 					}
 				}
 			} bestRank=dRank; }
@@ -1180,8 +923,6 @@ public class AI extends Thread
 		public abstract void doAction();
 		@Override
 		public abstract int hashCode();
-		//@Override
-		//public boolean equals(Object O){return super.equals(O);}
 	}
 	protected class MoveRank extends ActionRank
 	{
@@ -1378,13 +1119,13 @@ public class AI extends Thread
 		public void doAction()
 		{
 			piece=map.getPieceAt(piece.x(), piece.y());
-			//SecondPlanPoint source=startPoint;
 			Point source=new Point(piece.x(), piece.y());
 			SecondPlanPoint target=startPoint;
 			int step=piece.moveRange()-1;
 			ArrayList<Point> targets=new ArrayList();
 			ArrayList<SelectAction> actions=new ArrayList();
 			//Walk through path, mark each destination tile and type.
+			if(target.x==piece.x() && target.y==piece.y()) target=target.toHere;
 			for(int i=0;target!=null;i++)
 			{
 				if(PlanPoint.distanceTo(target, source)>1)
@@ -1444,7 +1185,11 @@ public class AI extends Thread
 					}
 					if(piece.pieceType().special == Special.Aim)
 					{
-						if(screen.AIWholeAction(piece.x(), piece.y(), SelectAction.Special, piece.x(), piece.y())) continue;
+						if(screen.AIWholeAction(piece.x(), piece.y(), SelectAction.Special, piece.x(), piece.y()))
+						{
+							piece=map.getPieceAt(piece.x(), piece.y());
+							continue;
+						}
 						throw new RuntimeException("Desired target is invalid (Aim)!");
 					}
 					else if(piece.pieceType().special == Special.Shot)
@@ -1577,10 +1322,8 @@ public class AI extends Thread
 		public PlanPoint(){}
 		public PlanPoint(int x, int y){super(x, y);}
 		public PlanPoint(Point P){super(P);}
-		//public PlanPoint(int a){movesLeft=a;}
 		public PlanPoint(int x, int y, int a, int m){super(x, y);movesLeft=m;actionsLeft=a;}
 		public PlanPoint(int x, int y, int a, int m, int e){super(x, y);movesLeft=m;actionsLeft=a;jumpsLeft=e;}
-		//public PlanPoint(Point P, int a){super(P);movesLeft=a;}
 		public ArrayList<PlanPoint> reachableFrom=new ArrayList();
 		public PlanPoint[] reachableArray;
 		public static int distanceTo(Point P, Point P2)
@@ -1614,7 +1357,6 @@ public class AI extends Thread
 		HashMap<ArrayList<ExpectedChange>, FinalSecondPlanPoint> realDamageToTarget=new HashMap(); //Collection of actually possible options for dealing damage to a target
 		int maxActionsLeftover; //Temp variable used for each piece to calculate the maximum times it can attack that piece.
 		boolean[][] interestingPoint;
-		//PlanPoint[] target;
 		SecondPlanPoint[] spps; //List of destinations to move to to attack an enemy from.
 		int sppsSize=0;
 		boolean hasBlast=false;
@@ -1625,7 +1367,7 @@ public class AI extends Thread
 		//Note: Marksman has a special-case destination, 1 less move to reserve for using special.
 		//Start with the destination to attack a piece from, backtrack to find theoretical starting points/paths
 		//Populates spps array. Returns maximum number of moves leftover possible.
-		public int findPathsTo(PlanPoint destination, AnalysisForPiece piece)
+		public int findPathsTo(PlanPoint destination, PlanPoint targetPoint, AnalysisForPiece piece)
 		{
 			//list of points to ignore because you could have reached them more easily
 			ArrayList<PlanPoint> shortCircuitable=new ArrayList();
@@ -1633,14 +1375,14 @@ public class AI extends Thread
 			
 			if(piece.piece.x()==destination.x && piece.piece.y()==destination.y)
 			{
-				addSPP(new FinalSecondPlanPoint(destination.x, destination.y, destination.actionsLeft, 0, this));
+				addSPP(new FinalSecondPlanPoint(destination.x, destination.y, destination.actionsLeft, 0, this, false));
 				int result=destination.actionsLeft;
 				//finishPathsTo(destination, piece);
 				return result;
 			}
-			
+			shortCircuitable.add(targetPoint);
+			shortCircuitable.add(destination);
 			PlanPoint[] from=destination.reachableFrom.toArray(new PlanPoint[destination.reachableFrom.size()]);
-			//int added=0;
 			for(int i=0;i<from.length;i++)
 			{
 				PlanPoint point=from[i];
@@ -1648,15 +1390,12 @@ public class AI extends Thread
 					continue;
 				else if(piece.piece.x()==point.x && piece.piece.y()==point.y)
 				{
-					//shortCircuitable.clear();
-					addSPP(new FinalSecondPlanPoint(destination.x, destination.y, destination.actionsLeft-1, 0, this));
+					addSPP(new FinalSecondPlanPoint(destination.x, destination.y, destination.actionsLeft-1, 0, this, true));
 					int result=destination.actionsLeft-1;
-					//finishPathsTo(destination, piece);
 					return result;
 				}
 				shortCircuitable.add(point);
 			}
-			//boolean success=false;
 			maxActionsLeftover=0;
 			SecondPlanPoint firstPoint=null;
 			for(int i=0;i<from.length;i++)
@@ -1667,13 +1406,11 @@ public class AI extends Thread
 				if(result==null) continue;
 				if(firstPoint==null)
 				{
-					//success=true;
 					firstPoint=new SecondPlanPoint(destination.x, destination.y, from.length-i, this);
 					addSPP(firstPoint);
 				}
 				firstPoint.add(result);
 			}
-			//finishPathsTo(destination, piece);
 			return maxActionsLeftover;
 		}
 		//Return null if this point cannot be tracked back to a finalsecondplanpoint. Else return a solved
@@ -1689,9 +1426,8 @@ public class AI extends Thread
 				if(piece.piece.x()==fromHere.x && piece.piece.y()==fromHere.y)
 				{
 					int actionsLeft=fromHere.actionsLeft-actions;
-					//if(moves>fromHere.movesLeft) actionsLeft--;
 					if(maxActionsLeftover<actionsLeft) maxActionsLeftover=actionsLeft;
-					return new FinalSecondPlanPoint(fromHere.x, fromHere.y, actionsLeft, piece.maxJumps-jumps, this);
+					return new FinalSecondPlanPoint(fromHere.x, fromHere.y, actionsLeft, piece.maxJumps-jumps, this, false);
 				}
 			}
 			else
@@ -1727,13 +1463,12 @@ public class AI extends Thread
 					int actionsLeft=point.actionsLeft-actions;
 					if(moves==0) actionsLeft--;
 					if(maxActionsLeftover<actionsLeft) maxActionsLeftover=actionsLeft;
-					return new FinalSecondPlanPoint(fromHere.x, fromHere.y, actionsLeft, piece.maxJumps-jumps, this);
+					return new FinalSecondPlanPoint(fromHere.x, fromHere.y, actionsLeft, piece.maxJumps-jumps, this, true);
 				}
 				shortCircuitable.add(point);
 				added++;
 			}
-			//boolean success=false;
-			SecondPlanPoint thisSPP=null;// //, moves, actions, jumps);
+			SecondPlanPoint thisSPP=null;
 			
 			for(i=0;i<from.length;i++)
 			{
@@ -1745,7 +1480,6 @@ public class AI extends Thread
 				if(thisSPP==null)
 				{
 					thisSPP=new SecondPlanPoint(fromHere.x, fromHere.y, from.length-i, this);
-					//success=true;
 				}
 				thisSPP.add(result);
 			}
@@ -1776,12 +1510,14 @@ public class AI extends Thread
 		int finalActions;
 		int usedJumps;
 		int finalDamage; //This is lazily initialized when requested elsewhere.
+		boolean checkStart;
 		public FinalSecondPlanPoint(){}
 		//Marks its spot as an interesting point on the plan. Tracks jumps used (more = worse) and actions left (more=better)
-		public FinalSecondPlanPoint(int x, int y, int actions, int jumps, VaguePiecePlan a)
+		public FinalSecondPlanPoint(int x, int y, int actions, int jumps, VaguePiecePlan a, boolean checkStart)
 		{
 			this.x=x;
 			this.y=y;
+			this.checkStart=checkStart;
 			finalActions=actions;
 			usedJumps=jumps;
 			fromHere=emptyList;
@@ -1790,7 +1526,7 @@ public class AI extends Thread
 		@Override
 		public FinalSecondPlanPoint checkPath(boolean[][] mapPassable)
 		{
-			if(mapPassable[x][y]) return null;
+			if(checkStart && mapPassable[x][y]) return null;
 			return this;
 		}
 		public SecondPlanPoint destination()
@@ -1835,7 +1571,6 @@ public class AI extends Thread
 		public FinalSecondPlanPoint checkPath(boolean[][] mapPassable)
 		{
 			if(mapPassable[x][y]) return null;
-			//int best=0;
 			FinalSecondPlanPoint bestPoint=null;
 			for(int i=0;i<size;i++)
 			{
@@ -1850,7 +1585,6 @@ public class AI extends Thread
 					(nextPoint.finalActions==bestPoint.finalActions&&nextPoint.usedJumps<bestPoint.usedJumps))
 				{
 					bestPoint=nextPoint;
-					//best=bestPoint.finalActions;
 				}
 			}
 			return bestPoint;
@@ -1858,7 +1592,6 @@ public class AI extends Thread
 	}
 	protected static class ExpectedChange extends Point implements Comparable<ExpectedChange>
 	{
-		//boolean addPiece=false; //removePiece=true;
 		Piece addedPiece=null;
 		public ExpectedChange() {
 			super(0, 0);
@@ -2014,7 +1747,6 @@ public class AI extends Thread
 	}
 	protected static abstract class MovementLooper<T extends PlanPointPartial>
 	{
-		//int actions;
 		int moves;
 		int jumps;
 		ArrayList<T> options;
@@ -2028,10 +1760,8 @@ public class AI extends Thread
 		
 		public void doLoop(T point, Piece myPiece, GameInstance game, boolean doJumps)
 		{
-		//	doLoop(point, myPiece, game, doJumps, piece.actions());
-		//}
-		//public void doLoop(T point, Piece myPiece, GameInstance game, boolean doJumps, int startActions)
-		//{
+			last = 0;
+			lastNormal = 0;
 			source=point;
 			piece=myPiece;
 			options=new ArrayList();
@@ -2041,7 +1771,7 @@ public class AI extends Thread
 			for(;checkLoop();) //actions--
 			{
 				start=options.size()-1;
-				for(moves=piece.moveRange()-1;moves>=0;moves--)
+				for(moves=piece.moveRange();--moves>=0;)
 				{
 					startNormal=options.size()-1;
 					for(int j=startNormal;j>=lastNormal;j--)
@@ -2061,6 +1791,7 @@ public class AI extends Thread
 					}
 					lastNormal=startNormal+1;
 				}
+				moves=0;
 				if(doJumps) for(int j=start;j>=last;j--)
 				{
 					source=options.get(j);
