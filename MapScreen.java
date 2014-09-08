@@ -116,7 +116,7 @@ public class MapScreen extends GameScreen implements MouseListener, MouseWheelLi
 			endTurn=new MyButton(new ImageIcon(buttons.getSubimage(5, 4, 72, 32))) {
 				public void doAction(MouseEvent e) {
 					MapScreen map=getMapParent(e.getSource());
-					if(map!=null)
+					if(map!=null && !map.myGame.isComputer[map.myGame.playerTurn-1])
 					{
 						MechanicsLibrary.endTurn(map);
 					}
@@ -458,13 +458,16 @@ public class MapScreen extends GameScreen implements MouseListener, MouseWheelLi
 	}
 	public void AISelect(int tileX, int tileY)
 	{
-		selectUnit(tileX, tileY);
-		try{Thread.sleep(1000);}catch(InterruptedException e){}
+		if(selectUnit(tileX, tileY))
+		{
+			setAction(null);
+			try{Thread.sleep(1000);}catch(InterruptedException e){}
+		}
 	}
 	public Point[] AIAction(SelectAction action)
 	{
-		setAction(action);
-		try{Thread.sleep(1000);}catch(InterruptedException e){}
+		if(setAction(action))
+			try{Thread.sleep(1000);}catch(InterruptedException e){}
 		return validActionTargets;
 		
 	}
@@ -485,21 +488,27 @@ public class MapScreen extends GameScreen implements MouseListener, MouseWheelLi
 	
 	protected void clickSelect(int tileX, int tileY)
 	{
+		if(myGame.isComputer[myGame.playerTurn-1])
+		{
+			unitPanel.setUnit(myGame.myMap.getPieceAt(tileX, tileY));
+			return;
+		}
 		selectUnit(tileX, tileY);
 		if(selectedPiece!=null)
 			setAction(SelectAction.Move);
 		else
 			setAction(null);
 	}
-	public void selectUnit(int x, int y)
+	public boolean selectUnit(int x, int y)
 	{
-		selectedPiece=myGame.myMap.getPieceAt(x, y);
-		unitPanel.setUnit(selectedPiece);
+		return selectUnit(myGame.myMap.getPieceAt(x, y));
 	}
-	public void selectUnit(Piece unit)
+	public boolean selectUnit(Piece unit)
 	{
+		boolean changed=(selectedPiece!=unit);
 		selectedPiece=unit;
 		unitPanel.setUnit(unit);
+		return changed;
 	}
 	protected void clickTarget(int tileX, int tileY)
 	{
@@ -528,7 +537,7 @@ public class MapScreen extends GameScreen implements MouseListener, MouseWheelLi
 				selectUnit(null);
 		}
 		setAction(selectedAction);
-		repaint();
+		//repaint();
 	}
 	
 	public void mouseWheelMoved(MouseWheelEvent e) {
@@ -564,8 +573,9 @@ public class MapScreen extends GameScreen implements MouseListener, MouseWheelLi
 				setAction(SelectAction.Move);
 		}
 	}
-	public void setAction(SelectAction action)
+	public boolean setAction(SelectAction action)
 	{
+		boolean changed=(action!=selectedAction);
 		Color paintColor;
 		if(action==SelectAction.Move)
 		{
@@ -607,6 +617,7 @@ public class MapScreen extends GameScreen implements MouseListener, MouseWheelLi
 		selectedAction=action;
 		myGame.myMap.hilightTargets(validActionTargets, paintColor);
 		repaint();
+		return changed;
 	}
 
 	public void paintComponent(Graphics g)

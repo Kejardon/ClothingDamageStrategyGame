@@ -439,7 +439,7 @@ public class AI extends Thread
 									results.clear();
 									bestScore=score.score;
 								}
-								score.previous=P;
+								score.previous=source;
 								results.add(score);
 							}
 						}
@@ -515,9 +515,10 @@ public class AI extends Thread
 						{
 							if(!map.okSpot(targetIter.cX(), targetIter.cY())) continue;
 							int distance=PlanPoint.distanceTo(myPieceSpot, targetIter.cX(), targetIter.cY());
-							if(targetIter.cX()==myPieceSpot.x || targetIter.cY()==myPieceSpot.y)
-								distance++;
-							if(distance>5) continue;
+							//if(targetIter.cX()==myPieceSpot.x || targetIter.cY()==myPieceSpot.y)
+							//	distance++;
+							//if(distance>5) continue;
+							if(distance>3) continue;
 							for(SquareIterator hitIter=new SquareIterator(targetIter.cX(), targetIter.cY(), 0, 1);hitIter.next();)
 								if(map.okSpot(hitIter.cX(), hitIter.cY()))
 									interestMap[hitIter.cX()][hitIter.cY()]=true;
@@ -541,9 +542,10 @@ public class AI extends Thread
 					{
 						if(!map.okSpot(targetIter.cX(), targetIter.cY())) continue;
 						int distance=PlanPoint.distanceTo(myPieceSpot, targetIter.cX(), targetIter.cY());
-						if(targetIter.cX()==myPieceSpot.x || targetIter.cY()==myPieceSpot.y)
-							distance++;
-						if(distance>5) continue;
+						//if(targetIter.cX()==myPieceSpot.x || targetIter.cY()==myPieceSpot.y)
+						//	distance++;
+						//if(distance>5) continue;
+						if(distance>3) continue;
 						int score=0;
 						SquareIterator hitIter=new SquareIterator(targetIter.cX(), targetIter.cY(), 0, 1);
 						while(hitIter.next())
@@ -819,7 +821,6 @@ public class AI extends Thread
 				eLC=enemyPiece;
 				enemyLeader=(Piece.LeaderPiece)other;
 				enemyLeaderIndex=i;
-				break;
 			}
 		}
 		ArrayList<ExpectedChange> changes=new ArrayList();
@@ -999,7 +1000,7 @@ public class AI extends Thread
 					i=-1;
 					continue;
 				}
-				if((--current == 0 && i > 0) || (i == step))
+				if((--current == 0) || (i == step))
 				{
 					targets.add(dest);
 					actions.add(SelectAction.Move);
@@ -1022,6 +1023,20 @@ public class AI extends Thread
 			hash^=(target.y<<16);
 			hash^=(piece.y()<<24);
 			return hash;
+		}
+		@Override
+		public String toString()
+		{
+			StringBuilder str=new StringBuilder();
+			AnalysisForPiece tPiece=enemyPotential[target.target];
+			str.append(piece.name()).append(':').append(piece.x()).append(' ').append(piece.y()).append('.');
+			str.append(tPiece.piece.x()).append(' ').append(tPiece.piece.y()).append(".");
+			
+			for(PlanPointPath tPath : target.path())
+			{
+				str.append(tPath.x).append(' ').append(tPath.y).append(", ");
+			}
+			return str.toString();
 		}
 	}
 	protected class DamageRank extends ActionRank
@@ -1121,17 +1136,17 @@ public class AI extends Thread
 			piece=map.getPieceAt(piece.x(), piece.y());
 			Point source=new Point(piece.x(), piece.y());
 			SecondPlanPoint target=startPoint;
-			int step=piece.moveRange()-1;
+			int step=piece.moveRange();
 			ArrayList<Point> targets=new ArrayList();
 			ArrayList<SelectAction> actions=new ArrayList();
 			//Walk through path, mark each destination tile and type.
 			if(target.x==piece.x() && target.y==piece.y()) target=target.toHere;
-			for(int i=0;target!=null;i++)
+			for(int queue=0;target!=null;)
 			{
 				if(PlanPoint.distanceTo(target, source)>1)
 				{
 					//Jump
-					if(i>0)
+					if(queue>0)
 					{
 						targets.add(source);
 						actions.add(SelectAction.Move);
@@ -1140,15 +1155,15 @@ public class AI extends Thread
 					actions.add(SelectAction.Special);
 					source=target;
 					target=target.toHere;
-					i=-1;
+					queue=0;
 					continue;
 				}
-				source=target;
-				if(((target=target.toHere) == null && i > 0) || (i == step))
+				source=target; queue++;
+				if(((target=target.toHere) == null) || (queue == step))
 				{
 					targets.add(source);
 					actions.add(SelectAction.Move);
-					i=-1;
+					queue=0;
 				}
 			}
 			outerLoop:
@@ -1213,6 +1228,22 @@ public class AI extends Thread
 			hash^=(piece.y()<<24);
 			hash^=(enemyPieceIndex<<12);
 			return hash;
+		}
+		@Override
+		public String toString()
+		{
+			StringBuilder str=new StringBuilder();
+			
+			AnalysisForPiece tPiece=enemyPotential[enemyPieceIndex];
+			str.append(piece.name()).append(':').append(piece.x()).append(' ').append(piece.y()).append('.');
+			str.append(tPiece.piece.x()).append(' ').append(tPiece.piece.y()).append(".");
+			
+			for(SecondPlanPoint tPath=startPoint;tPath!=null;tPath=tPath.toHere)
+			{
+				
+				str.append(tPath.x).append(' ').append(tPath.y).append(", ");
+			}
+			return str.toString();
 		}
 	}
 	protected static class PlanPointPartial extends Point
